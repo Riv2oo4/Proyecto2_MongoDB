@@ -1,6 +1,6 @@
 
 from flask import Flask, request, jsonify
-from pymongo import MongoClient, ASCENDING, DESCENDING,TEXT
+from pymongo import MongoClient, ASCENDING, DESCENDING,TEXT , InsertOne, UpdateOne, DeleteOne, UpdateMany, DeleteMany
 import json
 from bson import ObjectId
 from flask_cors import CORS
@@ -320,6 +320,65 @@ def obtener_restaurantes():
     ).limit(100)  # Puedes ajustar o paginar si hay muchos
     return jsonify(list(restaurantes))
 
+@app.route('/<collection>', methods=['GET', 'POST', 'PUT', 'DELETE'])
+def handle_collection(collection):
+    coll = db[collection]
+
+    # GET con filtros, proyección, sort, skip, limit
+    if request.method == 'GET':
+        filt   = json.loads(request.args.get('filter', '{}'))
+        proj   = json.loads(request.args.get('projection', '{}'))
+        sort   = json.loads(request.args.get('sort', '[]'))
+        skip   = int(request.args.get('skip', 0))
+        limit  = int(request.args.get('limit', 50))
+
+        cursor = coll.find(filt, proj)
+        if sort:  cursor = cursor.sort(sort)
+        if skip:  cursor = cursor.skip(skip)
+        if limit: cursor = cursor.limit(limit)
+        return jsonify([serialize(d) for d in cursor])
+
+    # POST/PUT/DELETE con bulk_write
+    data = request.json
+    ops  = []
+
+    if request.method == 'POST':
+        if isinstance(data, list):
+            ops += [InsertOne(doc) for doc in data]
+        else:
+            ops.append(InsertOne(data))
+
+    elif request.method == 'PUT':
+        updates = data if isinstance(data, list) else [data]
+        for u in updates:
+            filt   = u.get('filter', {})
+            update = u.get('update', {})
+            if u.get('many', False):
+                ops.append(UpdateMany(filt, update))
+            else:
+                ops.append(UpdateOne(filt, update))
+
+    elif request.method == 'DELETE':
+        deletes = data if isinstance(data, list) else [data]
+        for d in deletes:
+            filt = d.get('filter', {})
+            if d.get('many', False):
+                ops.append(DeleteMany(filt))
+            else:
+                ops.append(DeleteOne(filt))
+
+    if not ops:
+        return jsonify({'error': 'No operations provided'}), 400
+
+    result = coll.bulk_write(ops)
+    return jsonify({
+        'inserted_count': getattr(result, 'inserted_count', 0),
+        'matched_count':  getattr(result, 'matched_count', 0),
+        'modified_count': getattr(result, 'modified_count', 0),
+        'deleted_count':  getattr(result, 'deleted_count', 0),
+        'upserted_count': getattr(result, 'upserted_count', 0),
+        'upserted_ids':   getattr(result, 'upserted_ids', {})
+    }), 200
 
 if __name__ == '__main__':
     app.run(debug=True)
