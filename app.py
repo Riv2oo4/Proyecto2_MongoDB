@@ -186,7 +186,7 @@ def restaurantes_cercanos():
     try:
         lat = float(request.args.get('lat'))
         lon = float(request.args.get('lon'))
-        max_dist = int(request.args.get('max_dist', 1000))  # en metros
+        max_dist = int(request.args.get('max_dist', 1000))  
 
         resultados = db.restaurante.find({
             "ubicacion": {
@@ -236,11 +236,10 @@ import random
 @app.route('/agregar-ubicaciones-multiples', methods=['PUT'])
 def agregar_ubicaciones_multiples():
     try:
-        # Punto base (Filadelfia)
         base_lon = -75.1652
         base_lat = 39.9526
 
-        restaurantes = db.business.find().limit(50)  # Puedes cambiar la cantidad
+        restaurantes = db.business.find().limit(50)  
 
         updated = 0
         for restaurante in restaurantes:
@@ -270,15 +269,13 @@ def agregar_ubicaciones_multiples():
 @app.route('/agregar-ubicaciones-guatemala', methods=['PUT'])
 def agregar_ubicaciones_guatemala():
     try:
-        # Coordenadas base de Ciudad de Guatemala
         base_lon = -90.5069
         base_lat = 14.6349
 
-        restaurantes = db.business.find().limit(50)  # Ajusta si quieres más
+        restaurantes = db.business.find().limit(50)  
 
         updated = 0
         for restaurante in restaurantes:
-            # Coordenadas aleatorias alrededor del punto base (±0.01 grados ~ 1km)
             lon = base_lon + random.uniform(-0.01, 0.01)
             lat = base_lat + random.uniform(-0.01, 0.01)
 
