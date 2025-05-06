@@ -1,180 +1,151 @@
+
 from flask import Flask, request, jsonify
-from pymongo import MongoClient
+from pymongo import MongoClient, ASCENDING, DESCENDING
 from bson import ObjectId
 from flask_cors import CORS
+from gridfs import GridFS
 
 app = Flask(__name__)
 CORS(app)
 
-# Conexión a MongoDB
 client = MongoClient("mongodb+srv://julio:Cesario2025@proyecto2.76c4wsh.mongodb.net/?retryWrites=true&w=majority&appName=proyecto2")
 db = client['proyecto2']
+fs = GridFS(db)
 
-def serialize_doc(doc):
+# Crear índices
+db.business.create_index([("name", ASCENDING)])
+db.user.create_index([("name", ASCENDING)])
+db.review.create_index([("business_id", ASCENDING)])
+db.tip.create_index([("user_id", ASCENDING)])
+db.checkin.create_index([("business_id", ASCENDING)])
+
+def serialize(doc):
     doc['_id'] = str(doc['_id'])
     return doc
 
-# ------------------------ BUSINESS ------------------------
+# Funciones genéricas
+def get_all(collection):
+    limit = int(request.args.get('limit', 50))
+    skip = int(request.args.get('skip', 0))
+    sort_field = request.args.get('sort', '_id')
+    sort_order = ASCENDING if request.args.get('order', 'asc') == 'asc' else DESCENDING
+    projection = {field: 1 for field in request.args.get('fields', '').split(',') if field}
+    docs = list(db[collection].find({}, projection).sort(sort_field, sort_order).skip(skip).limit(limit))
+    return jsonify([serialize(d) for d in docs])
 
-@app.route('/business', methods=['GET'])
-def get_businesses():
-    businesses = list(db.business.find().limit(50))
-    return jsonify([serialize_doc(b) for b in businesses])
+def get_one(collection, id):
+    doc = db[collection].find_one({"_id": ObjectId(id)})
+    return jsonify(serialize(doc)) if doc else (jsonify({"error": "Not found"}), 404)
 
-@app.route('/business/<id>', methods=['GET'])
-def get_business(id):
-    business = db.business.find_one({"_id": ObjectId(id)})
-    if business:
-        return jsonify(serialize_doc(business))
-    return jsonify({"error": "Business not found"}), 404
-
-@app.route('/business', methods=['POST'])
-def create_business():
+def insert_one(collection):
     data = request.json
-    result = db.business.insert_one(data)
-    return jsonify({"inserted_id": str(result.inserted_id)})
+    inserted = db[collection].insert_one(data)
+    return jsonify({"inserted_id": str(inserted.inserted_id)})
 
-@app.route('/business/<id>', methods=['PUT'])
-def update_business(id):
+def update_one(collection, id):
     data = request.json
-    result = db.business.update_one({"_id": ObjectId(id)}, {"$set": data})
+    result = db[collection].update_one({"_id": ObjectId(id)}, {"$set": data})
     return jsonify({"modified_count": result.modified_count})
 
-@app.route('/business/<id>', methods=['DELETE'])
-def delete_business(id):
-    result = db.business.delete_one({"_id": ObjectId(id)})
+def delete_one(collection, id):
+    result = db[collection].delete_one({"_id": ObjectId(id)})
     return jsonify({"deleted_count": result.deleted_count})
 
+# CRUD para cada colección
+@app.route('/business', methods=['GET', 'POST'])
+def business_collection():
+    if request.method == 'GET': return get_all('business')
+    if request.method == 'POST': return insert_one('business')
 
-# ------------------------ USER ------------------------
+@app.route('/business/<id>', methods=['GET', 'PUT', 'DELETE'])
+def business_document(id):
+    if request.method == 'GET': return get_one('business', id)
+    if request.method == 'PUT': return update_one('business', id)
+    if request.method == 'DELETE': return delete_one('business', id)
 
-@app.route('/user', methods=['GET'])
-def get_users():
-    users = list(db.user.find().limit(50))
-    return jsonify([serialize_doc(u) for u in users])
+@app.route('/user', methods=['GET', 'POST'])
+def user_collection():
+    if request.method == 'GET': return get_all('user')
+    if request.method == 'POST': return insert_one('user')
 
-@app.route('/user/<id>', methods=['GET'])
-def get_user(id):
-    user = db.user.find_one({"_id": ObjectId(id)})
-    if user:
-        return jsonify(serialize_doc(user))
-    return jsonify({"error": "User not found"}), 404
+@app.route('/user/<id>', methods=['GET', 'PUT', 'DELETE'])
+def user_document(id):
+    if request.method == 'GET': return get_one('user', id)
+    if request.method == 'PUT': return update_one('user', id)
+    if request.method == 'DELETE': return delete_one('user', id)
 
-@app.route('/user', methods=['POST'])
-def create_user():
-    data = request.json
-    result = db.user.insert_one(data)
-    return jsonify({"inserted_id": str(result.inserted_id)})
+@app.route('/review', methods=['GET', 'POST'])
+def review_collection():
+    if request.method == 'GET': return get_all('review')
+    if request.method == 'POST': return insert_one('review')
 
-@app.route('/user/<id>', methods=['PUT'])
-def update_user(id):
-    data = request.json
-    result = db.user.update_one({"_id": ObjectId(id)}, {"$set": data})
-    return jsonify({"modified_count": result.modified_count})
+@app.route('/review/<id>', methods=['GET', 'PUT', 'DELETE'])
+def review_document(id):
+    if request.method == 'GET': return get_one('review', id)
+    if request.method == 'PUT': return update_one('review', id)
+    if request.method == 'DELETE': return delete_one('review', id)
 
-@app.route('/user/<id>', methods=['DELETE'])
-def delete_user(id):
-    result = db.user.delete_one({"_id": ObjectId(id)})
-    return jsonify({"deleted_count": result.deleted_count})
+@app.route('/tip', methods=['GET', 'POST'])
+def tip_collection():
+    if request.method == 'GET': return get_all('tip')
+    if request.method == 'POST': return insert_one('tip')
 
+@app.route('/tip/<id>', methods=['GET', 'PUT', 'DELETE'])
+def tip_document(id):
+    if request.method == 'GET': return get_one('tip', id)
+    if request.method == 'PUT': return update_one('tip', id)
+    if request.method == 'DELETE': return delete_one('tip', id)
 
-# ------------------------ REVIEW ------------------------
+@app.route('/checkin', methods=['GET', 'POST'])
+def checkin_collection():
+    if request.method == 'GET': return get_all('checkin')
+    if request.method == 'POST': return insert_one('checkin')
 
-@app.route('/review', methods=['GET'])
-def get_reviews():
-    reviews = list(db.review.find().limit(50))
-    return jsonify([serialize_doc(r) for r in reviews])
+@app.route('/checkin/<id>', methods=['GET', 'PUT', 'DELETE'])
+def checkin_document(id):
+    if request.method == 'GET': return get_one('checkin', id)
+    if request.method == 'PUT': return update_one('checkin', id)
+    if request.method == 'DELETE': return delete_one('checkin', id)
 
-@app.route('/review/<id>', methods=['GET'])
-def get_review(id):
-    review = db.review.find_one({"_id": ObjectId(id)})
-    if review:
-        return jsonify(serialize_doc(review))
-    return jsonify({"error": "Review not found"}), 404
+# Agregación: top 5 negocios con más reviews
+@app.route('/aggregations/top-reviewed-businesses')
+def top_reviewed_businesses():
+    pipeline = [
+        {"$group": {"_id": "$business_id", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 5},
+        {"$lookup": {
+            "from": "business",
+            "localField": "_id",
+            "foreignField": "_id",
+            "as": "business_info"
+        }}
+    ]
+    result = list(db.review.aggregate(pipeline))
+    return jsonify(result)
 
-@app.route('/review', methods=['POST'])
-def create_review():
-    data = request.json
-    result = db.review.insert_one(data)
-    return jsonify({"inserted_id": str(result.inserted_id)})
+# Consulta con arrays
+@app.route('/tips-with-compliments')
+def tips_with_compliments():
+    tips = list(db.tip.find({"compliment_count": {"$gt": 1}}).limit(20))
+    return jsonify([serialize(t) for t in tips])
 
-@app.route('/review/<id>', methods=['PUT'])
-def update_review(id):
-    data = request.json
-    result = db.review.update_one({"_id": ObjectId(id)}, {"$set": data})
-    return jsonify({"modified_count": result.modified_count})
+# GridFS subir
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    file = request.files['file']
+    file_id = fs.put(file, filename=file.filename)
+    return jsonify({"file_id": str(file_id)})
 
-@app.route('/review/<id>', methods=['DELETE'])
-def delete_review(id):
-    result = db.review.delete_one({"_id": ObjectId(id)})
-    return jsonify({"deleted_count": result.deleted_count})
+# GridFS descargar
+@app.route('/download/<file_id>', methods=['GET'])
+def download_file(file_id):
+    file = fs.get(ObjectId(file_id))
+    return app.response_class(file.read(), content_type='application/octet-stream')
 
-
-# ------------------------ TIP ------------------------
-
-@app.route('/tip', methods=['GET'])
-def get_tips():
-    tips = list(db.tip.find().limit(50))
-    return jsonify([serialize_doc(t) for t in tips])
-
-@app.route('/tip/<id>', methods=['GET'])
-def get_tip(id):
-    tip = db.tip.find_one({"_id": ObjectId(id)})
-    if tip:
-        return jsonify(serialize_doc(tip))
-    return jsonify({"error": "Tip not found"}), 404
-
-@app.route('/tip', methods=['POST'])
-def create_tip():
-    data = request.json
-    result = db.tip.insert_one(data)
-    return jsonify({"inserted_id": str(result.inserted_id)})
-
-@app.route('/tip/<id>', methods=['PUT'])
-def update_tip(id):
-    data = request.json
-    result = db.tip.update_one({"_id": ObjectId(id)}, {"$set": data})
-    return jsonify({"modified_count": result.modified_count})
-
-@app.route('/tip/<id>', methods=['DELETE'])
-def delete_tip(id):
-    result = db.tip.delete_one({"_id": ObjectId(id)})
-    return jsonify({"deleted_count": result.deleted_count})
-
-
-# ------------------------ CHECKIN ------------------------
-
-@app.route('/checkin', methods=['GET'])
-def get_checkins():
-    checkins = list(db.checkin.find().limit(50))
-    return jsonify([serialize_doc(c) for c in checkins])
-
-@app.route('/checkin/<id>', methods=['GET'])
-def get_checkin(id):
-    checkin = db.checkin.find_one({"_id": ObjectId(id)})
-    if checkin:
-        return jsonify(serialize_doc(checkin))
-    return jsonify({"error": "Checkin not found"}), 404
-
-@app.route('/checkin', methods=['POST'])
-def create_checkin():
-    data = request.json
-    result = db.checkin.insert_one(data)
-    return jsonify({"inserted_id": str(result.inserted_id)})
-
-@app.route('/checkin/<id>', methods=['PUT'])
-def update_checkin(id):
-    data = request.json
-    result = db.checkin.update_one({"_id": ObjectId(id)}, {"$set": data})
-    return jsonify({"modified_count": result.modified_count})
-
-@app.route('/checkin/<id>', methods=['DELETE'])
-def delete_checkin(id):
-    result = db.checkin.delete_one({"_id": ObjectId(id)})
-    return jsonify({"deleted_count": result.deleted_count})
-
-
-# ------------------------ MAIN ------------------------
+@app.route('/status')
+def status():
+    return jsonify({"status": "API running with full rubric support"})
 
 if __name__ == '__main__':
     app.run(debug=True)
