@@ -13,11 +13,28 @@ db = client['proyecto2']
 fs = GridFS(db)
 
 # Crear índices
-db.business.create_index([("name", ASCENDING)])
-db.user.create_index([("name", ASCENDING)])
-db.review.create_index([("business_id", ASCENDING)])
-db.tip.create_index([("user_id", ASCENDING)])
-db.checkin.create_index([("business_id", ASCENDING)])
+# Usuarios
+db.usuario.create_index([("nombre", ASCENDING)])
+db.usuario.create_index([("correo", ASCENDING)])
+
+# Restaurantes
+db.restaurante.create_index([("nombre", ASCENDING)])
+db.restaurante.create_index([("ubicacion", "2dsphere")])  # geoespacial
+
+# Artículos del Menú
+db.articulomenu.create_index([("nombre", ASCENDING)])
+db.articulomenu.create_index([("restaurante_id", ASCENDING)])
+
+# Órdenes
+db.orden.create_index([("usuario_id", ASCENDING)])
+db.orden.create_index([("estado", ASCENDING)])
+db.orden.create_index([("items.articulo_id", ASCENDING)])  # multikey
+db.orden.create_index([("usuario_id", ASCENDING), ("estado", ASCENDING)])  # compuesto
+
+# Reseñas
+db.reseña.create_index([("comentario", "text")])  # índice de texto
+db.reseña.create_index([("usuario_id", ASCENDING)])
+
 
 def serialize(doc):
     doc['_id'] = str(doc['_id'])
