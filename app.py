@@ -1,6 +1,6 @@
 
 from flask import Flask, request, jsonify
-from pymongo import MongoClient, ASCENDING, DESCENDING
+from pymongo import MongoClient, ASCENDING, DESCENDING,TEXT
 from bson import ObjectId
 from flask_cors import CORS
 from gridfs import GridFS
@@ -12,29 +12,33 @@ client = MongoClient("mongodb+srv://julio:Cesario2025@proyecto2.76c4wsh.mongodb.
 db = client['proyecto2']
 fs = GridFS(db)
 
-# Crear índices
+
+#índices simples
 # Usuarios
-db.usuario.create_index([("nombre", ASCENDING)])
-db.usuario.create_index([("correo", ASCENDING)])
+db.user.create_index([("name", ASCENDING)])
+# Negocios
+db.business.create_index([("name", ASCENDING)])
+# Reviews
+db.review.create_index([("stars", ASCENDING)])
 
-# Restaurantes
-db.restaurante.create_index([("nombre", ASCENDING)])
-db.restaurante.create_index([("ubicacion", "2dsphere")])  # geoespacial
+#índices compuestos
+# Reviews: índice compuesto por user y business
+db.review.create_index([("user_id", ASCENDING), ("business_id", ASCENDING)])
 
-# Artículos del Menú
-db.articulomenu.create_index([("nombre", ASCENDING)])
-db.articulomenu.create_index([("restaurante_id", ASCENDING)])
+# Tips: índice compuesto por user y date
+db.tip.create_index([("user_id", ASCENDING), ("date", DESCENDING)])
+#ÍNDICE MULTIKEY
+# Business: índice multikey en arreglo categories
+db.business.create_index([("categories", ASCENDING)])
 
-# Órdenes
-db.orden.create_index([("usuario_id", ASCENDING)])
-db.orden.create_index([("estado", ASCENDING)])
-db.orden.create_index([("items.articulo_id", ASCENDING)])  # multikey
-db.orden.create_index([("usuario_id", ASCENDING), ("estado", ASCENDING)])  # compuesto
 
-# Reseñas
-db.reseña.create_index([("comentario", "text")])  # índice de texto
-db.reseña.create_index([("usuario_id", ASCENDING)])
 
+#índices de texto
+# Review: índice de texto en el campo "text"
+db.review.create_index([("text", TEXT)])
+
+# Business: búsquedas por categorías 
+db.business.create_index([("categories", TEXT)])
 
 def serialize(doc):
     doc['_id'] = str(doc['_id'])
@@ -164,5 +168,157 @@ def download_file(file_id):
 def status():
     return jsonify({"status": "API running with full rubric support"})
 
+'''
+@app.route('/verificar-indices/<coleccion>', methods=['GET'])
+def verificar_indices(coleccion):
+    try:
+        indices = list(db[coleccion].list_indexes())
+        return jsonify([{
+            "name": idx["name"],
+            "key": list(idx["key"].items()),
+            "type": idx.get("2dsphereIndexVersion", "normal") if "2dsphereIndexVersion" in idx else "normal"
+        } for idx in indices])
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+@app.route('/restaurantes-cercanos', methods=['GET'])
+def restaurantes_cercanos():
+    try:
+        lat = float(request.args.get('lat'))
+        lon = float(request.args.get('lon'))
+        max_dist = int(request.args.get('max_dist', 1000))  # en metros
+
+        resultados = db.restaurante.find({
+            "ubicacion": {
+                "$near": {
+                    "$geometry": {
+                        "type": "Point",
+                        "coordinates": [lon, lat]
+                    },
+                    "$maxDistance": max_dist
+                }
+            }
+        }).limit(10)
+
+        return jsonify([serialize(r) for r in resultados])
+    except Exception as e:
+        return jsonify({"error": str(e)})
+@app.route('/ubicaciones-restaurantes', methods=['GET'])
+def ubicaciones_restaurantes():
+    restaurantes = db.business.find(
+        {"ubicacion": {"$exists": True}},
+        {"name": 1, "ubicacion": 1, "_id": 0}
+    )
+    return jsonify(list(restaurantes))
+
+@app.route('/agregar-ubicacion/<id>', methods=['PUT'])
+def agregar_ubicacion(id):
+    try:
+        lon = float(request.args.get('lon'))
+        lat = float(request.args.get('lat'))
+
+        result = db.business.update_one(
+            {"_id": ObjectId(id)},
+            {
+                "$set": {
+                    "ubicacion": {
+                        "type": "Point",
+                        "coordinates": [lon, lat]
+                    }
+                }
+            }
+        )
+        return jsonify({"modified_count": result.modified_count})
+    except Exception as e:
+        return jsonify({"error": str(e)})
+import random
+
+@app.route('/agregar-ubicaciones-multiples', methods=['PUT'])
+def agregar_ubicaciones_multiples():
+    try:
+        # Punto base (Filadelfia)
+        base_lon = -75.1652
+        base_lat = 39.9526
+
+        restaurantes = db.business.find().limit(50)  # Puedes cambiar la cantidad
+
+        updated = 0
+        for restaurante in restaurantes:
+            lon = base_lon + random.uniform(-0.01, 0.01)
+            lat = base_lat + random.uniform(-0.01, 0.01)
+
+            result = db.business.update_one(
+                {"_id": restaurante["_id"]},
+                {
+                    "$set": {
+                        "ubicacion": {
+                            "type": "Point",
+                            "coordinates": [lon, lat]
+                        }
+                    }
+                }
+            )
+
+            if result.modified_count > 0:
+                updated += 1
+
+        return jsonify({"ubicaciones_agregadas": updated})
+    except Exception as e:
+        return jsonify({"error": str(e)})
+    
+    
+@app.route('/agregar-ubicaciones-guatemala', methods=['PUT'])
+def agregar_ubicaciones_guatemala():
+    try:
+        # Coordenadas base de Ciudad de Guatemala
+        base_lon = -90.5069
+        base_lat = 14.6349
+
+        restaurantes = db.business.find().limit(50)  # Ajusta si quieres más
+
+        updated = 0
+        for restaurante in restaurantes:
+            # Coordenadas aleatorias alrededor del punto base (±0.01 grados ~ 1km)
+            lon = base_lon + random.uniform(-0.01, 0.01)
+            lat = base_lat + random.uniform(-0.01, 0.01)
+
+            result = db.business.update_one(
+                {"_id": restaurante["_id"]},
+                {
+                    "$set": {
+                        "ubicacion": {
+                            "type": "Point",
+                            "coordinates": [lon, lat]
+                        }
+                    }
+                }
+            )
+
+            if result.modified_count > 0:
+                updated += 1
+
+        return jsonify({"ubicaciones_agregadas": updated})
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+@app.route('/restaurantes/total', methods=['GET'])
+def contar_restaurantes():
+    total = db.business.count_documents({
+        "categories": {
+            "$regex": ".*Restaurants.*",
+            "$options": "i"
+        }
+    })
+    return jsonify({"total_restaurantes": total})
+
+
+@app.route('/restaurantes', methods=['GET'])
+def obtener_restaurantes():
+    restaurantes = db.business.find(
+        { "categories": { "$regex": ".*Restaurants.*", "$options": "i" } },
+        { "name": 1, "address": 1, "city": 1, "state": 1, "categories": 1, "_id": 0 }
+    ).limit(100)  # Puedes ajustar o paginar si hay muchos
+    return jsonify(list(restaurantes))
+'''
 if __name__ == '__main__':
     app.run(debug=True)
