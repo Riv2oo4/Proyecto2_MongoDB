@@ -73,22 +73,11 @@ def delete_one(collection, id):
     result = db[collection].delete_one({"_id": ObjectId(id)})
     return jsonify({"deleted_count": result.deleted_count})
 
-# # CRUD para cada colección
-# @app.route('/business', methods=['GET', 'POST'])
-# def business_collection():
-#     if request.method == 'GET': return get_all('business')
-#     if request.method == 'POST': return insert_one('business')
-
 @app.route('/business/<id>', methods=['GET', 'PUT', 'DELETE'])
 def business_document(id):
     if request.method == 'GET': return get_one('business', id)
     if request.method == 'PUT': return update_one('business', id)
     if request.method == 'DELETE': return delete_one('business', id)
-
-# @app.route('/user', methods=['GET', 'POST'])
-# def user_collection():
-#     if request.method == 'GET': return get_all('user')
-#     if request.method == 'POST': return insert_one('user')
 
 @app.route('/user/<id>', methods=['GET', 'PUT', 'DELETE'])
 def user_document(id):
@@ -96,32 +85,17 @@ def user_document(id):
     if request.method == 'PUT': return update_one('user', id)
     if request.method == 'DELETE': return delete_one('user', id)
 
-# @app.route('/review', methods=['GET', 'POST'])
-# def review_collection():
-#     if request.method == 'GET': return get_all('review')
-#     if request.method == 'POST': return insert_one('review')
-
 @app.route('/review/<id>', methods=['GET', 'PUT', 'DELETE'])
 def review_document(id):
     if request.method == 'GET': return get_one('review', id)
     if request.method == 'PUT': return update_one('review', id)
     if request.method == 'DELETE': return delete_one('review', id)
 
-# @app.route('/tip', methods=['GET', 'POST'])
-# def tip_collection():
-#     if request.method == 'GET': return get_all('tip')
-#     if request.method == 'POST': return insert_one('tip')
-
 @app.route('/tip/<id>', methods=['GET', 'PUT', 'DELETE'])
 def tip_document(id):
     if request.method == 'GET': return get_one('tip', id)
     if request.method == 'PUT': return update_one('tip', id)
     if request.method == 'DELETE': return delete_one('tip', id)
-
-# @app.route('/checkin', methods=['GET', 'POST'])
-# def checkin_collection():
-#     if request.method == 'GET': return get_all('checkin')
-#     if request.method == 'POST': return insert_one('checkin')
 
 @app.route('/checkin/<id>', methods=['GET', 'PUT', 'DELETE'])
 def checkin_document(id):
@@ -188,7 +162,7 @@ def restaurantes_cercanos():
         lon = float(request.args.get('lon'))
         max_dist = int(request.args.get('max_dist', 1000))  
 
-        resultados = db.restaurante.find({
+        resultados = db.business.find({
             "ubicacion": {
                 "$near": {
                     "$geometry": {
@@ -601,11 +575,7 @@ def update_business_hours(id):
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-
-
-
-
-
+    
+    
 if __name__ == '__main__':
     app.run(debug=True)
