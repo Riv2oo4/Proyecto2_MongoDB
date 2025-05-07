@@ -432,18 +432,14 @@ def count_tips_by_user(user_id):
 @app.route('/business/convert-categories-to-array/<id>', methods=['PUT'])
 def convert_categories_to_array(id):
     try:
-        # Primero obtenemos el documento actual
         business = db.business.find_one({"_id": ObjectId(id)})
         
         if not business:
             return jsonify({"error": "Negocio no encontrado"}), 404
         
-        # Verificamos si 'categories' existe y es un string
         if 'categories' in business and isinstance(business['categories'], str):
-            # Convertimos el string a un array con un único elemento
             categories_array = [business['categories']]
             
-            # Actualizamos el documento
             result = db.business.update_one(
                 {"_id": ObjectId(id)},
                 {"$set": {"categories": categories_array}}
@@ -454,7 +450,6 @@ def convert_categories_to_array(id):
                 "message": "Campo 'categories' convertido de string a array"
             })
         elif 'categories' not in business:
-            # Si no existe, creamos un array vacío
             result = db.business.update_one(
                 {"_id": ObjectId(id)},
                 {"$set": {"categories": []}}
