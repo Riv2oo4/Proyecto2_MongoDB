@@ -391,15 +391,15 @@ def count_reviews_by_stars():
 # Agregación simple: contar usuarios por ciudad
 @app.route('/aggregations/count-users-by-city', methods=['GET'])
 def count_users_by_city():
-    cities = db.user.distinct("city")
+    cities = db.user.distinct("cool")
     result = {}
     
     for city in cities:
         if city:  
-            count = db.user.count_documents({"city": city})
+            count = db.user.count_documents({"cool": city})
             result[city] = count
     
-    return jsonify({"cities_count": result})
+    return jsonify({"Personas mas cool": result})
 
 # Agregación simple: categorías distintas de negocios
 @app.route('/aggregations/distinct-business-categories', methods=['GET'])
@@ -427,5 +427,166 @@ def count_tips_by_user(user_id):
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+
+# Agregar una nueva categoría a un negocio usando $addToSet
+@app.route('/business/add-category/<id>', methods=['PUT'])
+def add_business_category(id):
+    try:
+        category = request.json.get('category')
+        if not category:
+            return jsonify({"error": "Se requiere una categoría"}), 400
+        
+        result = db.business.update_one(
+            {"_id": ObjectId(id)},
+            {"$addToSet": {"categories": category}}
+        )
+        
+        return jsonify({
+            "modified_count": result.modified_count,
+            "message": f"Categoría '{category}' agregada al negocio" if result.modified_count > 0 else "No se realizaron cambios"
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# Eliminar una categoría de un negocio usando $pull
+@app.route('/business/remove-category/<id>', methods=['PUT'])
+def remove_business_category(id):
+    try:
+        category = request.json.get('category')
+        if not category:
+            return jsonify({"error": "Se requiere una categoría"}), 400
+        
+        result = db.business.update_one(
+            {"_id": ObjectId(id)},
+            {"$pull": {"categories": category}}
+        )
+        
+        return jsonify({
+            "modified_count": result.modified_count,
+            "message": f"Categoría '{category}' eliminada del negocio" if result.modified_count > 0 else "No se realizaron cambios"
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# Agregar un nuevo horario a un negocio usando $push
+@app.route('/business/add-hours/<id>', methods=['PUT'])
+def add_business_hours(id):
+    try:
+        hours_data = request.json
+        if not hours_data or not isinstance(hours_data, dict):
+            return jsonify({"error": "Se requiere un objeto con el día y las horas"}), 400
+        
+        # Ejemplo: {"day": "Monday", "hours": "9:00-18:00"}
+        result = db.business.update_one(
+            {"_id": ObjectId(id)},
+            {"$push": {"hours": hours_data}}
+        )
+        
+        return jsonify({
+            "modified_count": result.modified_count,
+            "message": "Horario agregado al negocio" if result.modified_count > 0 else "No se realizaron cambios"
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# Agregar múltiples categorías de una vez usando $each con $push
+@app.route('/business/add-multiple-categories/<id>', methods=['PUT'])
+def add_multiple_categories(id):
+    try:
+        categories = request.json.get('categories', [])
+        if not categories or not isinstance(categories, list):
+            return jsonify({"error": "Se requiere una lista de categorías"}), 400
+        
+        result = db.business.update_one(
+            {"_id": ObjectId(id)},
+            {"$push": {"categories": {"$each": categories}}}
+        )
+        
+        return jsonify({
+            "modified_count": result.modified_count,
+            "categories_added": len(categories),
+            "message": "Categorías agregadas al negocio" if result.modified_count > 0 else "No se realizaron cambios"
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# Agregar un elemento a un array si no existe, o incrementar un contador si existe
+@app.route('/user/add-favorite/<id>', methods=['PUT'])
+def add_user_favorite(id):
+    try:
+        business_id = request.json.get('business_id')
+        if not business_id:
+            return jsonify({"error": "Se requiere un ID de negocio"}), 400
+        
+        # Primero verificamos si el array de favoritos existe
+        user = db.user.find_one({"_id": ObjectId(id)})
+        
+        if not user:
+            return jsonify({"error": "Usuario no encontrado"}), 404
+        
+        # Si el usuario no tiene un array de favoritos, lo creamos con $set
+        if "favorites" not in user:
+            db.user.update_one(
+                {"_id": ObjectId(id)},
+                {"$set": {"favorites": []}}
+            )
+        
+        # Ahora agregamos el negocio a favoritos si no existe
+        result = db.user.update_one(
+            {"_id": ObjectId(id)},
+            {"$addToSet": {"favorites": business_id}}
+        )
+        
+        # Si se modificó, significa que se agregó a favoritos
+        if result.modified_count > 0:
+            # Incrementamos el contador de favoritos del negocio
+            db.business.update_one(
+                {"_id": ObjectId(business_id)},
+                {"$inc": {"favorite_count": 1}}
+            )
+            
+            return jsonify({
+                "message": "Negocio agregado a favoritos"
+            })
+        else:
+            return jsonify({
+                "message": "El negocio ya estaba en favoritos"
+            })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# Actualizar elementos específicos de un array usando $[]
+@app.route('/business/update-hours/<id>', methods=['PUT'])
+def update_business_hours(id):
+    try:
+        day = request.json.get('day')
+        new_hours = request.json.get('hours')
+        
+        if not day or not new_hours:
+            return jsonify({"error": "Se requiere el día y las nuevas horas"}), 400
+        
+        result = db.business.update_one(
+            {
+                "_id": ObjectId(id),
+                "hours.day": day
+            },
+            {
+                "$set": {"hours.$[elem].hours": new_hours}
+            },
+            array_filters=[{"elem.day": day}]
+        )
+        
+        return jsonify({
+            "modified_count": result.modified_count,
+            "message": f"Horario actualizado para {day}" if result.modified_count > 0 else "No se encontró el día especificado"
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+
+
+
+
 if __name__ == '__main__':
     app.run(debug=True)
