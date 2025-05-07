@@ -376,6 +376,56 @@ def handle_collection(collection):
         'upserted_count': getattr(result, 'upserted_count', 0),
         'upserted_ids':   getattr(result, 'upserted_ids', {})
     }), 200
+# Agregación simple: contar reviews por estrellas
+@app.route('/aggregations/count-reviews-by-stars', methods=['GET'])
+def count_reviews_by_stars():
+    stars_values = db.review.distinct("stars")
+    result = {}
+    
+    for star in stars_values:
+        count = db.review.count_documents({"stars": star})
+        result[str(star)] = count
+    
+    return jsonify(result)
 
+# Agregación simple: contar usuarios por ciudad
+@app.route('/aggregations/count-users-by-city', methods=['GET'])
+def count_users_by_city():
+    cities = db.user.distinct("city")
+    result = {}
+    
+    for city in cities:
+        if city:  
+            count = db.user.count_documents({"city": city})
+            result[city] = count
+    
+    return jsonify({"cities_count": result})
+
+# Agregación simple: categorías distintas de negocios
+@app.route('/aggregations/distinct-business-categories', methods=['GET'])
+def distinct_business_categories():
+    categories = db.business.distinct("categories")
+    categories = [cat for cat in categories if cat]
+    categories.sort()
+    
+    return jsonify({"distinct_categories": categories})
+
+# Agregación simple: contar tips por usuario
+@app.route('/aggregations/count-tips-by-user/<user_id>', methods=['GET'])
+def count_tips_by_user(user_id):
+    try:
+        user_id_obj = ObjectId(user_id) if len(user_id) == 24 else user_id
+        
+        count = db.tip.count_documents({"user_id": user_id_obj})
+        
+        user = db.user.find_one({"_id": user_id_obj}, {"name": 1})
+        
+        return jsonify({
+            "user_id": user_id,
+            "user_name": user.get("name", "Unknown") if user else "Unknown",
+            "tips_count": count
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
 if __name__ == '__main__':
     app.run(debug=True)
