@@ -429,22 +429,46 @@ def count_tips_by_user(user_id):
         return jsonify({"error": str(e)}), 400
 
 # Agregar una nueva categoría a un negocio usando $addToSet
-@app.route('/business/add-category/<id>', methods=['PUT'])
-def add_business_category(id):
+@app.route('/business/convert-categories-to-array/<id>', methods=['PUT'])
+def convert_categories_to_array(id):
     try:
-        category = request.json.get('category')
-        if not category:
-            return jsonify({"error": "Se requiere una categoría"}), 400
+        # Primero obtenemos el documento actual
+        business = db.business.find_one({"_id": ObjectId(id)})
         
-        result = db.business.update_one(
-            {"_id": ObjectId(id)},
-            {"$addToSet": {"categories": category}}
-        )
+        if not business:
+            return jsonify({"error": "Negocio no encontrado"}), 404
         
-        return jsonify({
-            "modified_count": result.modified_count,
-            "message": f"Categoría '{category}' agregada al negocio" if result.modified_count > 0 else "No se realizaron cambios"
-        })
+        # Verificamos si 'categories' existe y es un string
+        if 'categories' in business and isinstance(business['categories'], str):
+            # Convertimos el string a un array con un único elemento
+            categories_array = [business['categories']]
+            
+            # Actualizamos el documento
+            result = db.business.update_one(
+                {"_id": ObjectId(id)},
+                {"$set": {"categories": categories_array}}
+            )
+            
+            return jsonify({
+                "modified_count": result.modified_count,
+                "message": "Campo 'categories' convertido de string a array"
+            })
+        elif 'categories' not in business:
+            # Si no existe, creamos un array vacío
+            result = db.business.update_one(
+                {"_id": ObjectId(id)},
+                {"$set": {"categories": []}}
+            )
+            
+            return jsonify({
+                "modified_count": result.modified_count,
+                "message": "Campo 'categories' creado como array vacío"
+            })
+        else:
+            return jsonify({
+                "message": "El campo 'categories' ya es un array o tiene otro tipo"
+            })
+            
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
